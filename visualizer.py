@@ -7,13 +7,15 @@ from sorting_algorithms import SortingAlgorithms
 import tracemalloc
 
 WIDTH, HEIGHT = 800, 600
-BAR_WIDTH = 5
 BAR_COLOR = (0, 102, 204)
 BG_COLOR = (255, 255, 255)
 SELECTED_COLOR = (255, 0, 0)
 BUTTON_COLOR = (200, 200, 200)
 BUTTON_HOVER_COLOR = (150, 150, 150)
 TEXT_COLOR = (0, 0, 0)
+INPUT_COLOR = (240, 240, 240)
+INPUT_BORDER_COLOR = (150, 150, 150)
+INPUT_ACTIVE_COLOR = (220, 220, 255)
 
 class SortVisualizer:
     def __init__(self):
@@ -58,6 +60,16 @@ class SortVisualizer:
         self.run_all_button = pygame.Rect(350, 70, 200, 40)
         self.stats_button = pygame.Rect(350, 130, 200, 40)
         
+        # Configuration pour l'entrée du nombre d'éléments
+        self.element_count = 100  # Valeur par défaut
+        self.min_value = 1
+        self.max_value = 1000000000000000000000000
+        self.element_input_rect = pygame.Rect(350, 190, 200, 40)
+        self.element_input_active = False
+        self.element_input_text = str(self.element_count)
+        
+        self.bar_width = WIDTH // self.element_count if self.element_count <= WIDTH else 1
+        
         self.numbers = []
         self.generate_numbers()
         self.create_buttons()
@@ -88,7 +100,8 @@ class SortVisualizer:
             json.dump(self.results_history, f)
 
     def generate_numbers(self):
-        self.numbers = [random.randint(1, HEIGHT - 100) for _ in range(WIDTH // BAR_WIDTH)]
+        self.numbers = [random.randint(1, HEIGHT - 100) for _ in range(self.element_count)]
+        self.bar_width = WIDTH // self.element_count if self.element_count <= WIDTH else 1
 
     def create_buttons(self):
         self.buttons = []
@@ -99,10 +112,17 @@ class SortVisualizer:
     def draw_bars(self, highlighted_indices=None):
         self.screen.fill(BG_COLOR)
         highlighted_indices = highlighted_indices or []
+        
+        # Adapter l'affichage en fonction du nombre d'éléments
+        bar_width = self.bar_width
         for i, value in enumerate(self.numbers):
-            x = i * BAR_WIDTH
+            if i >= WIDTH // bar_width:
+                break  # Ne pas dessiner plus de barres que ce qui peut tenir à l'écran
+                
+            x = i * bar_width
+            height = min(value % (HEIGHT - 100), HEIGHT - 100)  # Assurer que la hauteur est dans les limites
             color = SELECTED_COLOR if i in highlighted_indices else BAR_COLOR
-            pygame.draw.rect(self.screen, color, (x, HEIGHT - value, BAR_WIDTH, value))
+            pygame.draw.rect(self.screen, color, (x, HEIGHT - height, bar_width, height))
 
         # Afficher les statistiques
         stats_text = self.font.render(f"Comparaisons: {self.comparisons} | Échanges: {self.swaps}", True, TEXT_COLOR)
@@ -139,6 +159,17 @@ class SortVisualizer:
         pygame.draw.rect(self.screen, color, self.stats_button)
         text = self.font.render("Statistiques / Moyennes", True, TEXT_COLOR)
         self.screen.blit(text, (self.stats_button.x + 10, self.stats_button.y + 10))
+        
+        # Zone de saisie pour le nombre d'éléments
+        input_color = INPUT_ACTIVE_COLOR if self.element_input_active else INPUT_COLOR
+        pygame.draw.rect(self.screen, input_color, self.element_input_rect)
+        pygame.draw.rect(self.screen, INPUT_BORDER_COLOR, self.element_input_rect, 2)
+        
+        input_label = self.font.render("Nombre d'éléments:", True, TEXT_COLOR)
+        self.screen.blit(input_label, (self.element_input_rect.x - 200, self.element_input_rect.y + 10))
+        
+        input_text = self.font.render(self.element_input_text, True, TEXT_COLOR)
+        self.screen.blit(input_text, (self.element_input_rect.x + 10, self.element_input_rect.y + 10))
 
         pygame.display.flip()
 
@@ -362,6 +393,16 @@ class SortVisualizer:
                         
             self.clock.tick(60)
 
+    def update_element_count(self):
+        try:
+            new_count = int(self.element_input_text)
+            if new_count > 0:
+                self.element_count = new_count
+                self.generate_numbers()
+        except ValueError:
+            # Réinitialiser le texte à la valeur actuelle si la conversion échoue
+            self.element_input_text = str(self.element_count)
+
     def run(self):
         running = True
         show_menu = True
@@ -373,6 +414,14 @@ class SortVisualizer:
                     if event.type == pygame.QUIT:
                         running = False
                     elif event.type == pygame.MOUSEBUTTONDOWN:
+                        # Vérifier si la zone de saisie est cliquée
+                        if self.element_input_rect.collidepoint(event.pos):
+                            self.element_input_active = True
+                        else:
+                            if self.element_input_active:
+                                self.element_input_active = False
+                                self.update_element_count()
+                            
                         # Vérifier les boutons des algorithmes individuels
                         for i, (rect, _) in enumerate(self.buttons):
                             if rect.collidepoint(event.pos):
@@ -394,6 +443,18 @@ class SortVisualizer:
                         # Vérifier le bouton "Statistiques"
                         if self.stats_button.collidepoint(event.pos):
                             self.display_statistics()
+                    
+                    elif event.type == pygame.KEYDOWN:
+                        if self.element_input_active:
+                            if event.key == pygame.K_RETURN:
+                                self.element_input_active = False
+                                self.update_element_count()
+                            elif event.key == pygame.K_BACKSPACE:
+                                self.element_input_text = self.element_input_text[:-1]
+                            else:
+                                # N'accepter que les chiffres
+                                if event.unicode.isdigit():
+                                    self.element_input_text += event.unicode
             else:
                 self.draw_return_button()
                 for event in pygame.event.get():
