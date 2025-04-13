@@ -5,6 +5,10 @@ import json
 import os
 from sorting_algorithms import SortingAlgorithms
 import tracemalloc
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 
 WIDTH, HEIGHT = 800, 600
 BAR_COLOR = (0, 102, 204)
@@ -26,8 +30,11 @@ class SortVisualizer:
         self.is_sorting = False
         self.memory_usage = 0
         self.peak_memory = 0
-        self.results_history = self.load_history()
         self.current_results = {}
+        self.performance_data = {name: {'sizes': [], 'times': []} for name in [
+            "Selection Sort", "Bubble Sort", "Insertion Sort", 
+            "Merge Sort", "Quick Sort", "Heap Sort", "Comb Sort"
+        ]}
         
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -58,7 +65,8 @@ class SortVisualizer:
         self.buttons = []
         self.return_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT - 60, 200, 40)
         self.run_all_button = pygame.Rect(350, 70, 200, 40)
-        self.stats_button = pygame.Rect(350, 130, 200, 40)
+        self.graph_button = pygame.Rect(350, 130, 200, 40)
+        self.benchmark_button = pygame.Rect(350, 250, 200, 40)  # Ajout d'un bouton pour lancer les benchmarks
         
         # Configuration pour l'entrée du nombre d'éléments
         self.element_count = 100  # Valeur par défaut
@@ -74,30 +82,9 @@ class SortVisualizer:
         self.generate_numbers()
         self.create_buttons()
         
-        self.show_stats = False
         self.showing_results = False
-
-    def load_history(self):
-        """Charge l'historique des résultats depuis un fichier JSON"""
-        if os.path.exists('sort_history.json'):
-            try:
-                with open('sort_history.json', 'r') as f:
-                    return json.load(f)
-            except:
-                return {name: {"times": [], "memory": []} for name in [
-                    "Selection Sort", "Bubble Sort", "Insertion Sort", 
-                    "Merge Sort", "Quick Sort", "Heap Sort", "Comb Sort"
-                ]}
-        else:
-            return {name: {"times": [], "memory": []} for name in [
-                "Selection Sort", "Bubble Sort", "Insertion Sort", 
-                "Merge Sort", "Quick Sort", "Heap Sort", "Comb Sort"
-            ]}
-    
-    def save_history(self):
-        """Sauvegarde l'historique des résultats dans un fichier JSON"""
-        with open('sort_history.json', 'w') as f:
-            json.dump(self.results_history, f)
+        self.showing_graph = False
+        self.graph_surface = None
 
     def generate_numbers(self):
         self.numbers = [random.randint(1, HEIGHT - 100) for _ in range(self.element_count)]
@@ -154,18 +141,24 @@ class SortVisualizer:
         text = self.font.render("Lancer tous les tris", True, TEXT_COLOR)
         self.screen.blit(text, (self.run_all_button.x + 10, self.run_all_button.y + 10))
         
-        # Bouton pour afficher les statistiques
-        color = BUTTON_HOVER_COLOR if self.stats_button.collidepoint(mouse_pos) else BUTTON_COLOR
-        pygame.draw.rect(self.screen, color, self.stats_button)
-        text = self.font.render("Statistiques / Moyennes", True, TEXT_COLOR)
-        self.screen.blit(text, (self.stats_button.x + 10, self.stats_button.y + 10))
+        # Bouton pour afficher le graphique de performance
+        color = BUTTON_HOVER_COLOR if self.graph_button.collidepoint(mouse_pos) else BUTTON_COLOR
+        pygame.draw.rect(self.screen, color, self.graph_button)
+        text = self.font.render("Graphique de performance", True, TEXT_COLOR)
+        self.screen.blit(text, (self.graph_button.x + 10, self.graph_button.y + 10))
+        
+        # Bouton pour lancer les benchmarks
+        color = BUTTON_HOVER_COLOR if self.benchmark_button.collidepoint(mouse_pos) else BUTTON_COLOR
+        pygame.draw.rect(self.screen, color, self.benchmark_button)
+        text = self.font.render("Lancer les benchmarks", True, TEXT_COLOR)
+        self.screen.blit(text, (self.benchmark_button.x + 10, self.benchmark_button.y + 10))
         
         # Zone de saisie pour le nombre d'éléments
         input_color = INPUT_ACTIVE_COLOR if self.element_input_active else INPUT_COLOR
         pygame.draw.rect(self.screen, input_color, self.element_input_rect)
         pygame.draw.rect(self.screen, INPUT_BORDER_COLOR, self.element_input_rect, 2)
         
-        input_label = self.font.render("Nombre d'éléments:", True, TEXT_COLOR)
+        input_label = self.font.render("", True, TEXT_COLOR)
         self.screen.blit(input_label, (self.element_input_rect.x - 200, self.element_input_rect.y + 10))
         
         input_text = self.font.render(self.element_input_text, True, TEXT_COLOR)
@@ -196,7 +189,7 @@ class SortVisualizer:
         self.peak_memory = max(self.peak_memory, peak / 1024)
 
         # Si on n'est pas en mode "affichage des résultats", dessiner l'animation
-        if not self.showing_results:
+        if not self.showing_results and not self.showing_graph:
             self.draw_bars([i, j])
             
             # Ralentir légèrement l'animation pour mieux voir les changements
@@ -253,12 +246,17 @@ class SortVisualizer:
                 "swaps": self.swaps
             }
             
-            # Ajouter à l'historique
-            self.results_history[algorithm_name]["times"].append(self.execution_time)
-            self.results_history[algorithm_name]["memory"].append(self.peak_memory)
-            
-            # Sauvegarder l'historique
-            self.save_history()
+            # Enregistrer les données pour le graphique
+            if algorithm_name in self.performance_data:
+                # Vérifier si cette taille existe déjà dans les données
+                if self.element_count in self.performance_data[algorithm_name]['sizes']:
+                    # Mettre à jour le temps pour cette taille
+                    index = self.performance_data[algorithm_name]['sizes'].index(self.element_count)
+                    self.performance_data[algorithm_name]['times'][index] = self.execution_time
+                else:
+                    # Ajouter la nouvelle taille et son temps
+                    self.performance_data[algorithm_name]['sizes'].append(self.element_count)
+                    self.performance_data[algorithm_name]['times'].append(self.execution_time)
 
         # Afficher une dernière image des barres triées si en mode animation
         if show_animation:
@@ -337,42 +335,168 @@ class SortVisualizer:
                         
             self.clock.tick(60)
 
-    def display_statistics(self):
+    def generate_performance_graph(self):
+        # Création de la figure matplotlib
+        fig = Figure(figsize=(8, 5))
+        canvas = FigureCanvasAgg(fig)
+        ax = fig.add_subplot(111)
+
+        ax.set_title("Temps d'exécution des algorithmes de tri selon la taille des données")
+        ax.set_xlabel("Nombre de données (échelle log)")
+        ax.set_ylabel("Temps d'exécution (s) (échelle log)")
+        ax.grid(True)
+    
+        # Configurer les échelles logarithmiques
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+        colors = ['b', 'orange', 'g', 'r', 'c', 'purple', 'pink']
+
+        # Garder une trace des algorithmes avec des données
+        has_data = False
+
+        for i, (algo_name, data) in enumerate(self.performance_data.items()):
+            if data['sizes'] and data['times']:
+                print(f"{algo_name}: sizes = {data['sizes']}, times = {data['times']}")
+            
+                # Trier les données par taille pour le tracé
+                sorted_pairs = sorted(zip(data['sizes'], data['times']))
+                sizes, times = zip(*sorted_pairs) if sorted_pairs else ([], [])
+            
+                if sizes and times:
+                    has_data = True
+                    # Tracer la ligne et les points
+                    ax.plot(sizes, times, 
+                           label=self.translate_algo_name(algo_name),
+                           marker='o', 
+                           color=colors[i % len(colors)],
+                           linewidth=2,
+                           markersize=8)  # Augmenter la taille des points
+                
+                     # Annoter chaque point avec la taille
+                    for x, y in zip(sizes, times):
+                        # Seulement ajouter des annotations si le nombre de points est limité
+                        if len(sizes) <= 10:
+                            ax.annotate(f"{x}", 
+                                        xy=(x, y), 
+                                       xytext=(5, 5),
+                                       textcoords='offset points', 
+                                       fontsize=8,
+                                       bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+
+        # Si aucune donnée n'est disponible, ajouter un message
+        if not has_data:
+            ax.text(0.5, 0.5, "Aucune donnée disponible.\nLancez d'abord des benchmarks!", 
+                   ha='center', va='center', transform=ax.transAxes, fontsize=14)
+        
+        ax.legend(loc='upper left')
+        fig.tight_layout()
+
+        # Dessine la figure
+        canvas.draw()
+
+    # Obtenir les données d'image RGBA
+        raw_data = canvas.buffer_rgba()
+        size = canvas.get_width_height()
+
+    # Conversion en tableau numpy
+        image_array = np.frombuffer(raw_data, dtype=np.uint8).reshape((size[1], size[0], 4))
+        image_array = image_array[:, :, :3]  # Supprimer le canal alpha
+
+    # Transposer et convertir en surface Pygame
+        self.graph_surface = pygame.surfarray.make_surface(np.transpose(image_array, (1, 0, 2)))
+
+    # Redimensionner pour s'adapter à l'écran si nécessaire
+        max_width = WIDTH - 40
+        max_height = HEIGHT - 100
+        ratio = min(max_width / self.graph_surface.get_width(), max_height / self.graph_surface.get_height())
+    
+        if ratio < 1:
+            new_size = (int(self.graph_surface.get_width() * ratio), 
+                        int(self.graph_surface.get_height() * ratio))
+            self.graph_surface = pygame.transform.scale(self.graph_surface, new_size)
+
+    # Enregistrement en image
+        fig.savefig("tri_performance.png")
+
+    def translate_algo_name(self, name):
+        """Traduit les noms d'algorithmes en français pour le graphique"""
+        translations = {
+            "Selection Sort": "Tri par sélection",
+            "Bubble Sort": "Tri à bulles",
+            "Insertion Sort": "Tri par insertion",
+            "Merge Sort": "Tri par fusion",
+            "Quick Sort": "Tri rapide",
+            "Heap Sort": "Tri par tas",
+            "Comb Sort": "Tri à peigne"
+        }
+        return translations.get(name, name)
+
+    def run_benchmark_tests(self):
+        """Exécute des tests de performance sur différentes tailles d'entrée"""
+        test_sizes = [30, 100, 300, 500, 1000]  # Différentes tailles à tester
+        
+        # Sauvegarde de la valeur actuelle
+        original_count = self.element_count
+        original_numbers = self.numbers.copy()
+        
+        # Message de démarrage des benchmarks
+        self.screen.fill(BG_COLOR)
+        running_text = self.font.render("Exécution des benchmarks en cours...", True, TEXT_COLOR)
+        self.screen.blit(running_text, (WIDTH // 2 - running_text.get_width() // 2, HEIGHT // 2))
+        pygame.display.flip()
+        
+        # Exécuter les tests pour chaque taille
+        for size in test_sizes:
+            self.element_count = size
+            self.generate_numbers()
+            
+            test_numbers = self.numbers.copy()
+            
+            # Exécuter chaque algorithme
+            for i, algorithm in enumerate(self.algorithms):
+                # Afficher la progression
+                self.screen.fill(BG_COLOR)
+                progress_text = self.font.render(f"Test: {self.algorithm_names[i]} - Taille: {size}", True, TEXT_COLOR)
+                self.screen.blit(progress_text, (WIDTH // 2 - progress_text.get_width() // 2, HEIGHT // 2))
+                pygame.display.flip()
+                
+                self.numbers = test_numbers.copy()
+                self.measure_performance(algorithm, self.algorithm_names[i], False)
+                
+                # Gérer les événements pour éviter que l'application ne semble bloquée
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        exit()
+        
+        # Restaurer la taille et les données originales
+        self.element_count = original_count
+        self.numbers = original_numbers
+        
+        # Régénérer le graphique avec les nouvelles données
+        self.graph_surface = None
+        self.generate_performance_graph()
+        
+        # Afficher le graphique
+        self.display_graph()
+
+    def display_graph(self):
         running = True
+        self.showing_graph = True
+        
+        # Générer le graphique si ce n'est pas déjà fait
+        if self.graph_surface is None:
+            self.generate_performance_graph()
         
         while running:
             self.screen.fill(BG_COLOR)
             
-            # Titre
-            title = self.font.render("Statistiques moyennes", True, TEXT_COLOR)
-            self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 20))
+            # Calculer la position pour centrer le graphique
+            graph_rect = self.graph_surface.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 30))
             
-            # Calculer et afficher les moyennes
-            headers = self.small_font.render("Algorithme                 Temps moyen (s)        Mémoire moyenne (KB)", True, TEXT_COLOR)
-            self.screen.blit(headers, (100, 70))
-            
-            pygame.draw.line(self.screen, TEXT_COLOR, (100, 90), (700, 90), 1)
-            
-            y_pos = 110
-            for i, name in enumerate(self.algorithm_names):
-                times = self.results_history[name]["times"]
-                memory = self.results_history[name]["memory"]
-                
-                avg_time = sum(times) / len(times) if times else 0
-                avg_memory = sum(memory) / len(memory) if memory else 0
-                
-                # Formater les moyennes
-                stats_text = self.small_font.render(
-                    f"{name.ljust(25)} {avg_time:.6f}               {avg_memory:.2f}", 
-                    True, TEXT_COLOR
-                )
-                self.screen.blit(stats_text, (100, y_pos))
-                
-                # Afficher le nombre d'essais
-                trials_text = self.small_font.render(f"({len(times)} essais)", True, TEXT_COLOR)
-                self.screen.blit(trials_text, (650, y_pos))
-                
-                y_pos += 30
+            # Afficher le graphique
+            self.screen.blit(self.graph_surface, graph_rect)
             
             # Bouton retour
             mouse_pos = pygame.mouse.get_pos()
@@ -390,6 +514,7 @@ class SortVisualizer:
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if self.return_button.collidepoint(event.pos):
                         running = False
+                        self.showing_graph = False
                         
             self.clock.tick(60)
 
@@ -440,9 +565,13 @@ class SortVisualizer:
                             self.generate_numbers()  # Générer un nouveau jeu de nombres
                             self.run_all_algorithms()
                         
-                        # Vérifier le bouton "Statistiques"
-                        if self.stats_button.collidepoint(event.pos):
-                            self.display_statistics()
+                        # Vérifier le bouton "Graphique de performance"
+                        if self.graph_button.collidepoint(event.pos):
+                            self.display_graph()
+                            
+                        # Vérifier le bouton "Lancer les benchmarks"
+                        if self.benchmark_button.collidepoint(event.pos):
+                            self.run_benchmark_tests()
                     
                     elif event.type == pygame.KEYDOWN:
                         if self.element_input_active:
