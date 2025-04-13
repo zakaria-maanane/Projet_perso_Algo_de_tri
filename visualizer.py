@@ -36,6 +36,10 @@ class SortVisualizer:
             "Merge Sort", "Quick Sort", "Heap Sort", "Comb Sort"
         ]}
         
+        # Ajouter un bouton pour réinitialiser le graphique
+        self.reset_graph_button = pygame.Rect(350, 310, 200, 40)
+    
+        # Initialiser Pygame et la fenêtre
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Tri Visuel")
@@ -152,7 +156,13 @@ class SortVisualizer:
         pygame.draw.rect(self.screen, color, self.benchmark_button)
         text = self.font.render("Lancer les benchmarks", True, TEXT_COLOR)
         self.screen.blit(text, (self.benchmark_button.x + 10, self.benchmark_button.y + 10))
-        
+       
+        # Bouton pour réinitialiser le graphique
+        color = BUTTON_HOVER_COLOR if self.reset_graph_button.collidepoint(mouse_pos) else BUTTON_COLOR
+        pygame.draw.rect(self.screen, color, self.reset_graph_button)
+        text = self.font.render("Réinitialiser graphique", True, TEXT_COLOR)
+        self.screen.blit(text, (self.reset_graph_button.x + 10, self.reset_graph_button.y + 10))
+    
         # Zone de saisie pour le nombre d'éléments
         input_color = INPUT_ACTIVE_COLOR if self.element_input_active else INPUT_COLOR
         pygame.draw.rect(self.screen, input_color, self.element_input_rect)
@@ -480,6 +490,17 @@ class SortVisualizer:
         
         # Afficher le graphique
         self.display_graph()
+    def reset_performance_data(self):
+        """Réinitialise toutes les données de performance pour le graphique"""
+        self.performance_data = {name: {'sizes': [], 'times': []} for name in self.algorithm_names}
+        self.graph_surface = None  # Forcer la régénération du graphique
+    
+        # Afficher un message de confirmation
+        self.screen.fill(BG_COLOR)
+        message = self.font.render("Les données du graphique ont été réinitialisées!", True, TEXT_COLOR)
+        self.screen.blit(message, (WIDTH // 2 - message.get_width() // 2, HEIGHT // 2))
+        pygame.display.flip()
+        pygame.time.delay(1000)  # Afficher le message pendant 1 seconde
 
     def display_graph(self):
         running = True
@@ -542,6 +563,10 @@ class SortVisualizer:
                         # Vérifier si la zone de saisie est cliquée
                         if self.element_input_rect.collidepoint(event.pos):
                             self.element_input_active = True
+
+                        # Vérifier le bouton "Réinitialiser graphique"
+                        if self.reset_graph_button.collidepoint(event.pos):
+                            self.reset_performance_data()    
                         else:
                             if self.element_input_active:
                                 self.element_input_active = False
