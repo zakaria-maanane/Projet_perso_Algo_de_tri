@@ -565,7 +565,7 @@ class SortVisualizer:
                             self.element_input_active = True
 
                         # Vérifier le bouton "Réinitialiser graphique"
-                        if self.reset_graph_button.collidepoint(event.pos):
+                        elif self.reset_graph_button.collidepoint(event.pos):
                             self.reset_performance_data()    
                         else:
                             if self.element_input_active:
