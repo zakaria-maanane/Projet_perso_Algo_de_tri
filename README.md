@@ -31,6 +31,8 @@ VISUEL SUR MON LINKEDIN (video trop volumineuse ) : https://www.linkedin.com/fee
 - L’interface affiche en temps réel : nombre de comparaisons, échanges, durée d’exécution, mémoire utilisée.
 
 ---
+DIAPO :  [ALGORITMES DE TRI.pdf](https://github.com/user-attachments/files/19733091/ALGORITMES.DE.TRI.pdf)
+
 
 ## 🛠️ Installation
 
